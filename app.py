@@ -7,9 +7,11 @@ import logging
 from Photomosaic import main
 from types import SimpleNamespace
 
+# Initialize the Flask app
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 
 # Route to generate the photomosaic
@@ -17,15 +19,18 @@ logging.basicConfig(level=logging.INFO)
 def generate_mosaic():
     temp_dir = None
     try:
+        # Check if input image is provided
         if 'input' not in request.files:
             return jsonify({'error': 'No input image provided'}), 400
         
         input_image = request.files['input']
         pool_images = request.files.getlist('pool')
         
+        # Check if pool images are provided
         if not pool_images:
             return jsonify({'error': 'No pool images provided'}), 400
 
+        # Get additional form parameters (default values if not provided)
         stride = int(request.form.get('stride', 30))
         output_width = int(request.form.get('output_width', 1000))
 
@@ -78,13 +83,21 @@ def generate_mosaic():
 # Serve the React frontend (index.html)
 @app.route('/')
 def serve():
-    return send_from_directory(app.static_folder, 'index.html')
+    try:
+        return send_from_directory(app.static_folder, 'index.html')
+    except FileNotFoundError:
+        logging.error("index.html not found in static folder")
+        return jsonify({'error': 'Frontend not found'}), 404
 
 # Serve any static file (JS, CSS, images, etc.)
 @app.route('/<path:path>')
 def serve_static(path):
-    return send_from_directory(app.static_folder, path)
+    try:
+        return send_from_directory(app.static_folder, path)
+    except FileNotFoundError:
+        logging.error(f"Static file {path} not found")
+        return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
     # Ensure the app runs in production mode by using debug only for local development
-    app.run(debug=True)
+    app.run(debug=False, host='0.0.0.0', port=5000)
