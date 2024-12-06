@@ -4,7 +4,10 @@ import os
 import tempfile
 import shutil
 import logging
-from Photomosaic import main
+import cv2
+import numpy as np
+import glob
+from itertools import product
 from types import SimpleNamespace
 
 # Initialize the Flask app
@@ -14,9 +17,43 @@ CORS(app)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+# Helper function for component image extraction and resizing
+def get_component_images(path, size):
+    images = []
+    avg_colors = []
+    for image_path in glob.glob("{}/*.png".format(path)) + glob.glob("{}/*.jpg".format(path)):
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        image = cv2.resize(image, (size, size))
+        images.append(image)
+        avg_colors.append(np.sum(np.sum(image, axis=0), axis=0) / (size ** 2))
+    return images, np.array(avg_colors)
+
+# Photomosaic generation logic
+def generate_mosaic(input_image_path, pool_dir, output_path, stride, output_width):
+    input_image = cv2.imread(input_image_path, cv2.IMREAD_COLOR)
+    if input_image is None:
+        raise ValueError(f"Failed to load the input image at {input_image_path}. Please check the file path.")
+    
+    height, width, num_channels = input_image.shape
+    blank_image = np.zeros((height, width, 3), np.uint8)
+
+    # Resize images in the pool and get their average colors
+    images, avg_colors = get_component_images(pool_dir, stride)
+
+    # Create the mosaic by matching the average colors of the components
+    for i, j in product(range(int(width / stride)), range(int(height / stride))):
+        partial_input_image = input_image[j * stride: (j + 1) * stride,
+                                          i * stride: (i + 1) * stride, :]
+        partial_avg_color = np.sum(np.sum(partial_input_image, axis=0), axis=0) / (stride ** 2)
+        distance_matrix = np.linalg.norm(partial_avg_color - avg_colors, axis=1)
+        idx = np.argmin(distance_matrix)
+        blank_image[j * stride: (j + 1) * stride, i * stride: (i + 1) * stride, :] = images[idx]
+
+    cv2.imwrite(output_path, blank_image)
+
 # Route to generate the photomosaic
 @app.route('/generate_mosaic', methods=['POST'])
-def generate_mosaic():
+def generate_mosaic_route():
     temp_dir = None
     try:
         # Check if input image is provided
@@ -50,17 +87,8 @@ def generate_mosaic():
 
         logging.info(f"Generating mosaic with stride={stride}, output_width={output_width}")
         
-        # Create options for the photomosaic function
-        options = SimpleNamespace(
-            input=input_path,
-            output=output_path,
-            pool=pool_dir,
-            stride=stride,
-            output_width=output_width
-        )
-        
         # Call the photomosaic generation function
-        main(options)
+        generate_mosaic(input_path, pool_dir, output_path, stride, output_width)
 
         # If the mosaic was generated successfully, return it
         if not os.path.exists(output_path):
