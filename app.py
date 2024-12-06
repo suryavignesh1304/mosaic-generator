@@ -128,4 +128,4 @@ def serve_static(path):
 
 if __name__ == '__main__':
     # Ensure the app runs in production mode by using debug only for local development
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000)
