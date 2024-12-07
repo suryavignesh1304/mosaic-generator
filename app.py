@@ -15,16 +15,23 @@ CORS(app)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Helper function for component image extraction and resizing
 def get_component_images(path, size):
     images = []
     avg_colors = []
     for image_path in glob.glob(os.path.join(path, "*.png")) + glob.glob(os.path.join(path, "*.jpg")):
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        image = cv2.resize(image, (size, size))
-        images.append(image)
-        avg_colors.append(np.sum(np.sum(image, axis=0), axis=0) / (size ** 2))
+        try:
+            image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+            if image is None:
+                logger.warning(f"Failed to load image: {image_path}")
+                continue
+            image = cv2.resize(image, (size, size))
+            images.append(image)
+            avg_colors.append(np.sum(np.sum(image, axis=0), axis=0) / (size ** 2))
+        except Exception as e:
+            logger.error(f"Error processing image {image_path}: {str(e)}")
     return images, np.array(avg_colors)
 
 # Photomosaic generation logic
@@ -38,6 +45,9 @@ def generate_mosaic(input_image_path, pool_dir, output_path, stride, output_widt
 
     # Resize images in the pool and get their average colors
     images, avg_colors = get_component_images(pool_dir, stride)
+    
+    if len(images) == 0:
+        raise ValueError("No valid images found in the pool directory.")
 
     # Create the mosaic by matching the average colors of the components
     for i, j in product(range(int(width / stride)), range(int(height / stride))):
@@ -84,7 +94,7 @@ def generate_mosaic_route():
         # Define the output path for the mosaic
         output_path = os.path.join(temp_dir, 'output.jpg')
 
-        logging.info(f"Generating mosaic with stride={stride}, output_width={output_width}")
+        logger.info(f"Generating mosaic with stride={stride}, output_width={output_width}")
         
         # Call the photomosaic generation function
         generate_mosaic(input_path, pool_dir, output_path, stride, output_width)
@@ -96,8 +106,8 @@ def generate_mosaic_route():
         return send_file(output_path, mimetype='image/jpeg', as_attachment=True, download_name='mosaic.jpg')
 
     except Exception as e:
-        logging.exception("An error occurred while generating the mosaic")
-        return jsonify({'error': str(e)}), 500
+        logger.exception("An error occurred while generating the mosaic")
+        return jsonify({'error': f'An error occurred while generating the mosaic: {str(e)}'}), 500
 
     finally:
         # Clean up the temporary directory after processing
@@ -105,7 +115,7 @@ def generate_mosaic_route():
             try:
                 shutil.rmtree(temp_dir)
             except Exception as e:
-                logging.error(f"Error removing temporary directory: {e}")
+                logger.error(f"Error removing temporary directory: {e}")
 
 # Serve the React frontend (index.html)
 @app.route('/', defaults={'path': ''})
