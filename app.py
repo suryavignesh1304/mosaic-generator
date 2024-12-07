@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 import glob
 from itertools import product
-from types import SimpleNamespace
 
 # Initialize the Flask app
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -21,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 def get_component_images(path, size):
     images = []
     avg_colors = []
-    for image_path in glob.glob("{}/*.png".format(path)) + glob.glob("{}/*.jpg".format(path)):
+    for image_path in glob.glob(os.path.join(path, "*.png")) + glob.glob(os.path.join(path, "*.jpg")):
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         image = cv2.resize(image, (size, size))
         images.append(image)
@@ -109,23 +108,15 @@ def generate_mosaic_route():
                 logging.error(f"Error removing temporary directory: {e}")
 
 # Serve the React frontend (index.html)
-@app.route('/')
-def serve():
-    try:
-        return send_from_directory(app.static_folder, 'index.html')
-    except FileNotFoundError:
-        logging.error("index.html not found in static folder")
-        return jsonify({'error': 'Frontend not found'}), 404
-
-# Serve any static file (JS, CSS, images, etc.)
+@app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
-def serve_static(path):
-    try:
+def serve(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
-    except FileNotFoundError:
-        logging.error(f"Static file {path} not found")
-        return jsonify({'error': 'File not found'}), 404
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
-    # Ensure the app runs in production mode by using debug only for local development
-    app.run(host='0.0.0.0', port=5000)
+    # Use the PORT environment variable provided by Railway
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
