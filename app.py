@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import glob
 from itertools import product
+import pkg_resources
 
 # Initialize the Flask app
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -63,6 +64,7 @@ def generate_mosaic(input_image_path, pool_dir, output_path, stride, output_widt
 # Route to generate the photomosaic
 @app.route('/generate_mosaic', methods=['POST'])
 def generate_mosaic_route():
+    logger.info("Received request to generate mosaic")
     temp_dir = None
     try:
         # Check if input image is provided
@@ -82,14 +84,18 @@ def generate_mosaic_route():
 
         # Create a temporary directory to store the input image and pool images
         temp_dir = tempfile.mkdtemp()
+        logger.info(f"Temporary directory created: {temp_dir}")
+
         input_path = os.path.join(temp_dir, 'input.jpg')
         input_image.save(input_path)
+        logger.info(f"Input image saved to: {input_path}")
 
         # Create a pool directory and save pool images
         pool_dir = os.path.join(temp_dir, 'pool')
         os.makedirs(pool_dir)
         for img in pool_images:
             img.save(os.path.join(pool_dir, img.filename))
+        logger.info(f"Number of pool images: {len(pool_images)}")
 
         # Define the output path for the mosaic
         output_path = os.path.join(temp_dir, 'output.jpg')
@@ -126,7 +132,23 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
+# Debug route to test file writing
+@app.route('/test_write', methods=['GET'])
+def test_write():
+    try:
+        with open('/tmp/test.txt', 'w') as f:
+            f.write('Test write operation')
+        return jsonify({'message': 'Write operation successful'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Debug route to list installed packages
+@app.route('/packages', methods=['GET'])
+def list_packages():
+    installed_packages = [f"{d.project_name}=={d.version}" for d in pkg_resources.working_set]
+    return jsonify(installed_packages)
+
 if __name__ == '__main__':
     # Use the PORT environment variable provided by Railway
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
