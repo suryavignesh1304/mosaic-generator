@@ -51,7 +51,7 @@ const MosaicGenerator: React.FC = () => {
     formData.append('output_width', outputWidth.toString());
 
     try {
-      const response = await axios.post<Blob>('http://localhost:5000/generate_mosaic', formData, {
+      const response = await axios.post<Blob>('https://photomosaic.up.railway.app/generate_mosaic', formData, {
         responseType: 'blob',
         headers: {
           'Content-Type': 'multipart/form-data',
